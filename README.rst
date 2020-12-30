@@ -1,0 +1,41 @@
+**IMPORTANT**: On Tuesday 23 June 2020 the yoyo repository will move to `Sourcehut <https://hg.sr.ht/~olly/yoyo/>`_.
+
+Yoyo database migrations
+========================
+
+Yoyo-migrations is a database schema migration tool.
+Database migrations can be written as SQL files or Python scripts.
+
+What does yoyo-migrations do?
+-----------------------------
+
+As your database application evolves, changes to the database schema may be
+required. Yoyo lets you write migration scripts in raw SQL or Python containing
+SQL statements to migrate your database schema to a new version.
+
+A simple migration script looks like this:
+
+.. code::python
+
+    # file: migrations/0001.create-foo.py
+    from yoyo import step
+    step(
+        "CREATE TABLE foo (id INT, bar VARCHAR(20), PRIMARY KEY (id))",
+        "DROP TABLE foo",
+    )
+
+Yoyo manages these database migration scripts,
+gives you command line tools to apply and rollback migrations,
+and manages dependencies between migrations.
+
+Database support
+----------------
+
+PostgreSQL, MySQL and SQLite databases are supported.
+ODBC and Oracle database backends are available (but unsupported).
+
+Documentation and code
+----------------------
+
+`Yoyo migrations documentation <https://ollycope.com/software/yoyo/>`_
+\| `Repository and issue tracker <https://sr.ht/~olly/yoyo/>`_
