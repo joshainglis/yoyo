@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import warnings
 from contextlib import contextmanager
 
@@ -113,3 +113,44 @@ class PostgresqlPsycopgBackend(PostgresqlBackend):
         from psycopg.pq import TransactionStatus
 
         return TransactionStatus.IDLE
+
+
+class PostgresqlPG8000Backend(PostgresqlBackend):
+    """
+    Like PostgresqlBackend, but using the PG8000 driver.
+    """
+
+    driver_module = "pg8000"
+
+    @property
+    def TRANSACTION_STATUS_IDLE(self):
+        from pg8000.core import IDLE
+
+        return IDLE
+
+
+class PostgresqlGoogleCloudSQLBackend(PostgresqlPG8000Backend):
+
+    def connect(self, dburi):
+        from google.cloud.sql.connector import Connector, IPTypes
+        from pg8000.dbapi import Connection, connect
+        instance_connection_name = os.environ["INSTANCE_CONNECTION_NAME"]
+        ip_type = IPTypes.PRIVATE if os.environ.get("PRIVATE_IP") else IPTypes.PUBLIC
+
+        connector = Connector()
+
+        kwargs = {"autocommit": True}
+
+        kwargs.update(dburi.args)
+        self.schema = kwargs.pop("schema", None)
+        autocommit = bool(kwargs.pop("autocommit"))
+        connection: Connection = connector.connect(
+            instance_connection_name,
+            "pg8000",
+            user=dburi.username,
+            password=dburi.password,
+            db=dburi.database,
+            ip_type=ip_type,
+        )
+        connection.autocommit = autocommit
+        return connection
