@@ -260,9 +260,10 @@ def apply(args, config) -> int:
     backend = get_backend(args, config)
     with backend.lock():
         migrations = get_migrations(args, backend)
-        backend.apply_migrations(migrations, args.force)
+        if migrations:
+            backend.apply_migrations_only(migrations, args.force)
+        backend.run_post_apply(migrations, args.force)
     return 0
-
 
 def reapply(args, config) -> int:
     backend = get_backend(args, config)
