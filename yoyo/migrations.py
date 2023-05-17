@@ -456,23 +456,17 @@ def _expand_sources(sources) -> t.Iterable[t.Tuple[str, t.List[str]]]:
             package_name = mo.group(1)
             resource_dir = mo.group(2)
             paths = [
-                pkg_resources.resource_filename(
-                    package_name, "{}/{}".format(resource_dir, f)
-                )
-                for f in sorted(
-                    pkg_resources.resource_listdir(package_name, resource_dir)
-                )
+                pkg_resources.resource_filename(package_name, "{}/{}".format(resource_dir, f))
+                for f in sorted(pkg_resources.resource_listdir(package_name, resource_dir))
                 if _is_migration_file(f)
             ]
-            yield (source, paths)
+            yield source, paths
         else:
-            for directory in glob(source):
-                paths = [
-                    os.path.join(directory, path)
-                    for path in os.listdir(directory)
-                    if _is_migration_file(path)
-                ]
-                yield (directory, sorted(paths))
+            for dirpath, dirnames, filenames in os.walk(source):
+                if dirpath.endswith("__pycache__"):
+                    continue
+                paths = [os.path.join(dirpath, path) for path in filenames if _is_migration_file(path)]
+                yield dirpath, sorted(paths)
 
 
 def read_migrations(*sources):
