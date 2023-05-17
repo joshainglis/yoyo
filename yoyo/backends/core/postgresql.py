@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import warnings
 from contextlib import contextmanager
 
@@ -113,3 +113,82 @@ class PostgresqlPsycopgBackend(PostgresqlBackend):
         from psycopg.pq import TransactionStatus
 
         return TransactionStatus.IDLE
+
+
+class PostgresqlPG8000Backend(PostgresqlBackend):
+    """
+    Like PostgresqlBackend, but using the PG8000 driver.
+    """
+
+    driver_module = "pg8000"
+
+    @property
+    def TRANSACTION_STATUS_IDLE(self):
+        from pg8000.core import IDLE
+
+        return IDLE
+
+    def connect(self, dburi):
+        from pg8000.dbapi import Connection, connect
+
+        kwargs = {"database": dburi.database, "autocommit": True}
+
+        # Default to autocommit mode: without this psycopg sends a BEGIN before
+        # every query, causing a warning when we then explicitly start a
+        # transaction. This warning becomes an error in CockroachDB. See
+        # https://todo.sr.ht/~olly/yoyo/71
+        kwargs["autocommit"] = True
+
+        kwargs.update(dburi.args)
+        if dburi.username is not None:
+            kwargs["user"] = dburi.username
+        if dburi.password is not None:
+            kwargs["password"] = dburi.password
+        if dburi.port is not None:
+            kwargs["port"] = dburi.port
+        if dburi.hostname is not None:
+            kwargs["host"] = dburi.hostname
+        self.schema = kwargs.pop("schema", None)
+        autocommit = bool(kwargs.pop("autocommit"))
+        connection = self.driver.dbapi.connect(**kwargs)
+        connection.autocommit = autocommit
+        return connection
+
+    def begin(self):
+        if self.connection._transaction_status != self.TRANSACTION_STATUS_IDLE:
+            warnings.warn(
+                "Nested transaction requested; "
+                "this will raise an exception in some "
+                "PostgreSQL-compatible databases"
+            )
+        assert not self._in_transaction
+        self._in_transaction = True
+        self.execute("BEGIN")
+
+
+
+class PostgresqlGoogleCloudSQLBackend(PostgresqlPG8000Backend):
+
+    def connect(self, dburi):
+        from google.cloud.sql.connector import Connector, IPTypes
+        from pg8000.dbapi import Connection
+        instance_connection_name = os.environ["INSTANCE_CONNECTION_NAME"]
+        ip_type = IPTypes.PRIVATE if os.environ.get("PRIVATE_IP") else IPTypes.PUBLIC
+
+        connector = Connector()
+
+        kwargs = {"autocommit": True}
+
+        kwargs.update(dburi.args)
+        self.schema = kwargs.pop("schema", None)
+        autocommit = bool(kwargs.pop("autocommit"))
+        connection: Connection = connector.connect(
+            instance_connection_name,
+            "pg8000",
+            user=dburi.username,
+            password=dburi.password,
+            db=dburi.database,
+            ip_type=ip_type,
+        )
+        connection.autocommit = autocommit
+        return connection
